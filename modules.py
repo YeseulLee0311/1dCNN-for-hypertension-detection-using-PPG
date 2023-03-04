@@ -7,6 +7,7 @@ import copy
 from datetime import datetime
 import os
 import pandas as pd
+from sklearn.metrics import confusion_matrix
 
 
 def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_sizes, device, num_epochs):
@@ -121,6 +122,7 @@ def test_model(model,dataloaders,dataset_size,device):
     
     model.eval()
     corrects=0
+    CM=0
     with torch.no_grad():
         for data in dataloaders['test']:
             images, labels, subject= data
@@ -129,10 +131,13 @@ def test_model(model,dataloaders,dataset_size,device):
             
             outputs = model(images) 
             preds = torch.argmax(outputs.data, 1)
-        
+            CM+=confusion_matrix(labels.cpu(), preds.cpu(),labels=[0,1,2])
+            
             corrects += torch.sum(preds == labels.data)
+            
         acc=corrects.double() / dataset_size
-        
         print('\nTestset Accuracy(mean): %f %%' % (100 * acc))
+        print('Confusion Matrix: ')
+        print(CM)
                 
     return acc
