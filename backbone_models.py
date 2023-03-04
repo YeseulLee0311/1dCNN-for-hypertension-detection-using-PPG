@@ -131,7 +131,7 @@ class VGG16(nn.Module):
             nn.Linear(4096, 4096),
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
-            nn.Linear(4096, num_classes)
+            nn.Linear(4096, num_classes),
         )
 
     def forward(self, x):
@@ -185,6 +185,7 @@ class VGG16(nn.Module):
         x = self.pool5(x)
         
         x = self.avgpool(x)
+        x = torch.flatten(x, 1)
         
         x = self.fc(x)
         
