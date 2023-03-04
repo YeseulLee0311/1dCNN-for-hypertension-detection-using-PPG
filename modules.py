@@ -97,14 +97,14 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
-    print('Best val Acc+Sen: {:4f}'.format(best_acc))
+    print('Best val Acc: {:4f}'.format(best_acc))
 
     plt.rcParams["figure.figsize"] = (8,8)
     fig, axs=plt.subplots(2)
     axs[0].set_title('model loss')
     axs[1].set_title('model accuracy')
     for ax in axs.flat:
-        ax.set_ylim([0.0,1.0])
+        ax.set_ylim([0.0,1.5])
     axs[0].plot(train_loss,'r',val_loss,'g',)
     axs[1].plot(train_acc,'r',val_acc,'g')
     fig.tight_layout()

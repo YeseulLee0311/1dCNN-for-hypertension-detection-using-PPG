@@ -273,13 +273,14 @@ for subject, segment in quality_dict.items():
 
 class BPDataset(data.Dataset):
     
-    def __init__(self, ppg_dir, label_path):
+    def __init__(self, ppg_dir, label_path, normalize):
 
         self.ppg_dir = ppg_dir
         self.label_path = label_path
         self.data = []
         self.label = []
         self.subjectid = []
+        self.normalize=normalize
         
         # read ppg data
         for subject in range(1, 220):
@@ -321,6 +322,7 @@ class BPDataset(data.Dataset):
         
     def __getitem__(self, index):
         data = self.data[index]
+        data=(data-self.normalize['mean'])/self.normalize['std'] #normalization
         label = self.label[index]
         subjectid = self.subjectid[index]
         return data, label, subjectid
