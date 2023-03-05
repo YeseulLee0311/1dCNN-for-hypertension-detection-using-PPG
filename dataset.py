@@ -319,9 +319,44 @@ class BPDataset(data.Dataset):
         
         self.label = torch.Tensor(self.label)
         self.label = self.label.type(torch.long)
+       
+    def median_filter(tensor_data):
+        x,y = tensor_data.size()
+        new_data = torch.zeros(x,y)
+        for i in range(x):
+            for j in range(y):
+                if j == 0:
+                    new_data[i][j] = tensor_data[i][j]
+                elif j < 11:
+                    new_data[i][j] = tensor_data[i][0: 2 * j + 1].median()
+                elif 11 <= j < y - 11:
+                    new_data[i][j] = tensor_data[i][j - 11: j + 12].median()
+                elif y - 11 <= j < y - 1:
+                    new_data[i][j] = tensor_data[i][2*j - y : y].median()
+                elif j == y - 1:
+                    new_data[i][j] = tensor_data[i][j]
+        return new_data
+      
+    def roll_filter(tensor_data):
+        x,y = tensor_data.size()
+        new_data = torch.zeros(x,y)
+        for i in range(x):
+            for j in range(y):
+                if j == 0:
+                    new_data[i][j] = tensor_data[i][j]
+                elif j < 11:
+                    new_data[i][j] = tensor_data[i][0: 2 * j + 1].mean()
+                elif 11 <= j < y - 11:
+                    new_data[i][j] = tensor_data[i][j - 11: j + 12].mean()
+                elif y - 11 <= j < y - 1:
+                    new_data[i][j] = tensor_data[i][2*j - y : y].mean()
+                elif j == y - 1:
+                    new_data[i][j] = tensor_data[i][j]
+        return new_data
         
     def __getitem__(self, index):
         data = self.data[index]
+        data = roll_filter(median_filter(data)) #preprocessing
         data=(data-self.normalize['mean'])/self.normalize['std'] #normalization
         label = self.label[index]
         subjectid = self.subjectid[index]
