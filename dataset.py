@@ -271,9 +271,9 @@ for subject, segment in quality_dict.items():
 
 ## Set up Pytorch Dataloader ##
 
-class BPDataset(data.Dataset):
+'''class BPDataset(data.Dataset):
     
-    def __init__(self, ppg_dir, label_path, normalize):
+    def __init__(self, ppg_dir, label_path, normalize, label=[0,1,2]):
 
         self.ppg_dir = ppg_dir
         self.label_path = label_path
@@ -328,7 +328,72 @@ class BPDataset(data.Dataset):
         return data, label, subjectid
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data)'''
 
+class BPDataset(data.Dataset):
+    
+    def __init__(self, ppg_dir, label_path, normalize, choose_class=[0,1,2]):
+
+        self.ppg_dir = ppg_dir
+        self.label_path = label_path
+        self.data = []
+        self.label = []
+        self.subjectid = []
+        self.normalize=normalize
+        self.choose_class=choose_class
+        
+        # read BP labels (Label: 'Stage 1 hypertension' or 'Stage 2 hypertension'-> 2; 'Prehypertension'-> 1; 'Normal'-> 0)
+        df = pd.read_csv(label_path, skiprows=1)
+        #print(set(df["Hypertension"]))
+        # choose class
+        class_id = [[] for i in range(3)]
+        for subject in range(219):
+          if df['Hypertension'][subject] == 'Stage 1 hypertension' or df['Hypertension'][subject] == 'Stage 2 hypertension':
+            class_id[2].append(subject+1)
+          elif df['Hypertension'][subject] == 'Prehypertension':
+            class_id[1].append(subject+1)
+          elif df['Hypertension'][subject] == 'Normal':
+            class_id[0].append(subject+1)
+
+        for c in choose_class:
+          # c=0,1,2
+          for subject in class_id[c]:
+            subjectid = quality_dict[subject][0]
+            if subject == 180:
+              continue
+            elif subject in [7, 23, 83, 88, 89, 103]:
+              self.label.extend([c]*2)
+            else:
+              self.label.extend([c]*3)
+            # read ppg data
+            for segnum in range(1, 4):
+              if (subject, segnum) not in [(7, 3), (23, 3), (83, 3), (88, 2), (89, 2), (103, 3), (180, 1), (180, 2), (180, 3)]:
+                ppg_path = os.path.join(ppg_dir, '{}_{}.txt'.format(subjectid, segnum))
+                if os.path.exists(ppg_path):
+                  with open(ppg_path) as f:
+                    lines = f.readlines()[0].split('\t')[:-1]
+                    if len(lines) != 2100:
+                      print(subject, subjectid, segment, len(lines))
+                      continue
+                    ppg = torch.Tensor([float(x) for x in lines])
+                    ppg = ppg.reshape((1,2100))
+                    self.data.append(ppg)
+                    self.subjectid.append(subjectid)
+        self.label = torch.Tensor(self.label)
+        self.label = self.label.type(torch.long)
+        
+    def __getitem__(self, index):
+        data = self.data[index]
+        data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
+        label = self.label[index]
+        subjectid = self.subjectid[index]
+        
+        if self.choose_class==[0,2] and label==2:
+          label=torch.tensor(1)
+          
+        return data, label, subjectid
+
+    def __len__(self):
+        return len(self.data)
 
 
