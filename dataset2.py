@@ -271,115 +271,19 @@ for subject, segment in quality_dict.items():
 
 ## Set up Pytorch Dataloader ##
 
-'''class BPDataset(data.Dataset):
+class BPDataset(data.Dataset):
     
-    def __init__(self, ppg_dir, label_path, normalize, label=[0,1,2]):
-
+    def __init__(self, ppg_dir, label_path, normalize, choose_class=[0,1,2]):
         self.ppg_dir = ppg_dir
         self.label_path = label_path
         self.data = []
         self.label = []
         self.subjectid = []
         self.normalize=normalize
-        
-        # read ppg data
-        for subject in range(1, 220):
-          subjectid = quality_dict[subject][0]
-          for segnum in range(1, 4):
-            if (subject, segnum) not in [(7, 3), (23, 3), (83, 3), (88, 2), (89, 2), (103, 3), (180, 1), (180, 2), (180, 3)]:
-              ppg_path = os.path.join(ppg_dir, '{}_{}.txt'.format(subjectid, segnum))
-              if os.path.exists(ppg_path):
-                with open(ppg_path) as f:
-                  lines = f.readlines()[0].split('\t')[:-1]
-                  if len(lines) != 2100:
-                    print(subject, subjectid, segment, len(lines))
-                    continue
-                  ppg = torch.Tensor([float(x) for x in lines])
-                  ppg = ppg.reshape((1,2100))
-                  self.data.append(ppg)
-                  self.subjectid.append(subjectid)
         
         # read BP labels (Label: 'Stage 1 hypertension' or 'Stage 2 hypertension'-> 2; 'Prehypertension'-> 1; 'Normal'-> 0)
         df = pd.read_csv(label_path, skiprows=1)
         print(set(df["Hypertension"]))
-        for subject in range(219):
-          if df['Hypertension'][subject] == 'Stage 1 hypertension' or df['Hypertension'][subject] == 'Stage 2 hypertension':
-            bp_label = 2
-          elif df['Hypertension'][subject] == 'Prehypertension':
-            bp_label = 1
-          elif df['Hypertension'][subject] == 'Normal':
-            bp_label = 0
-          
-          if subject+1 == 180:
-            continue
-          elif subject+1 in [7, 23, 83, 88, 89, 103]:
-            self.label.extend([bp_label]*2)
-          else:
-            self.label.extend([bp_label]*3)
-        
-        self.label = torch.Tensor(self.label)
-        self.label = self.label.type(torch.long)
-       
-    def median_filter(tensor_data):
-        x,y = tensor_data.size()
-        new_data = torch.zeros(x,y)
-        for i in range(x):
-            for j in range(y):
-                if j == 0:
-                    new_data[i][j] = tensor_data[i][j]
-                elif j < 11:
-                    new_data[i][j] = tensor_data[i][0: 2 * j + 1].median()
-                elif 11 <= j < y - 11:
-                    new_data[i][j] = tensor_data[i][j - 11: j + 12].median()
-                elif y - 11 <= j < y - 1:
-                    new_data[i][j] = tensor_data[i][2*j - y : y].median()
-                elif j == y - 1:
-                    new_data[i][j] = tensor_data[i][j]
-        return new_data
-      
-    def roll_filter(tensor_data):
-        x,y = tensor_data.size()
-        new_data = torch.zeros(x,y)
-        for i in range(x):
-            for j in range(y):
-                if j == 0:
-                    new_data[i][j] = tensor_data[i][j]
-                elif j < 11:
-                    new_data[i][j] = tensor_data[i][0: 2 * j + 1].mean()
-                elif 11 <= j < y - 11:
-                    new_data[i][j] = tensor_data[i][j - 11: j + 12].mean()
-                elif y - 11 <= j < y - 1:
-                    new_data[i][j] = tensor_data[i][2*j - y : y].mean()
-                elif j == y - 1:
-                    new_data[i][j] = tensor_data[i][j]
-        return new_data
-        
-    def __getitem__(self, index):
-        data = self.data[index]
-        data = roll_filter(median_filter(data)) #preprocessing
-        data=(data-self.normalize['mean'])/self.normalize['std'] #normalization
-        label = self.label[index]
-        subjectid = self.subjectid[index]
-        return data, label, subjectid
-
-    def __len__(self):
-        return len(self.data)'''
-
-class BPDataset(data.Dataset):
-    
-    def __init__(self, ppg_dir, label_path, normalize, choose_class=[0,1,2]):
-
-        self.ppg_dir = ppg_dir
-        self.label_path = label_path
-        self.data = []
-        self.label = []
-        self.subjectid = []
-        self.normalize=normalize
-        self.choose_class=choose_class
-        
-        # read BP labels (Label: 'Stage 1 hypertension' or 'Stage 2 hypertension'-> 2; 'Prehypertension'-> 1; 'Normal'-> 0)
-        df = pd.read_csv(label_path, skiprows=1)
-        #print(set(df["Hypertension"]))
         # choose class
         class_id = [[] for i in range(3)]
         for subject in range(219):
@@ -414,6 +318,7 @@ class BPDataset(data.Dataset):
                     ppg = ppg.reshape((1,2100))
                     self.data.append(ppg)
                     self.subjectid.append(subjectid)
+
         self.label = torch.Tensor(self.label)
         self.label = self.label.type(torch.long)
         
@@ -422,13 +327,10 @@ class BPDataset(data.Dataset):
         data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
         label = self.label[index]
         subjectid = self.subjectid[index]
-        
-        if self.choose_class==[0,2] and label==2:
-          label=torch.tensor(1)
-          
         return data, label, subjectid
 
     def __len__(self):
         return len(self.data)
+
 
 
