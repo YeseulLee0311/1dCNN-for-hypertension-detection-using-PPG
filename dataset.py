@@ -5,8 +5,8 @@ import random
 import pandas as pd
 import numpy as np
 
-ppg_dir = '/Users/yeseullee/Documents/ECE271B/PPGBPDatabase/Data File/0_subject'
-label_path = '/Users/yeseullee/Documents/ECE271B/PPGBPDatabase/Data File/PPG-BP dataset.csv'
+'''ppg_dir = '/Users/yeseullee/Documents/ECE271B/PPGBPDatabase/Data File/0_subject'
+label_path = '/Users/yeseullee/Documents/ECE271B/PPGBPDatabase/Data File/PPG-BP dataset.csv'''
 
 ## Choose High Quality Data ##
 
@@ -269,7 +269,196 @@ for subject, segment in quality_dict.items():
 #print(not_choose)
 #print(len(not_choose))
 
+##Define filters for preprocessing
+def median_filter(tensor_data):
+  x,y = tensor_data.size()
+  new_data = torch.zeros(x,y)
+  for i in range(x):
+      for j in range(y):
+          if j == 0:
+              new_data[i][j] = tensor_data[i][j]
+          elif j < 11:
+              new_data[i][j] = tensor_data[i][0: 2 * j + 1].median()
+          elif 11 <= j < y - 11:
+              new_data[i][j] = tensor_data[i][j - 11: j + 12].median()
+          elif y - 11 <= j < y - 1:
+              new_data[i][j] = tensor_data[i][2*j - y : y].median()
+          elif j == y - 1:
+              new_data[i][j] = tensor_data[i][j]
+  return new_data
+
+def roll_filter(tensor_data):
+  x,y = tensor_data.size()
+  new_data = torch.zeros(x,y)
+  for i in range(x):
+      for j in range(y):
+          if j == 0:
+              new_data[i][j] = tensor_data[i][j]
+          elif j < 11:
+              new_data[i][j] = tensor_data[i][0: 2 * j + 1].mean()
+          elif 11 <= j < y - 11:
+              new_data[i][j] = tensor_data[i][j - 11: j + 12].mean()
+          elif y - 11 <= j < y - 1:
+              new_data[i][j] = tensor_data[i][2*j - y : y].mean()
+          elif j == y - 1:
+              new_data[i][j] = tensor_data[i][j]
+  return new_data            
+
 ## Set up Pytorch Dataloader ##
+class BPDataset(data.Dataset):
+    
+    def __init__(self, ppg_dir, label_path, normalize, preprocessing, choose_class=[0,1,2]):
+
+        self.ppg_dir = ppg_dir
+        self.label_path = label_path
+        self.data = []
+        self.label = []
+        self.subjectid = []
+        self.normalize=normalize
+        self.preprocessing=preprocessing
+        self.choose_class=choose_class
+        
+        # read BP labels (Label: 'Stage 1 hypertension' or 'Stage 2 hypertension'-> 2; 'Prehypertension'-> 1; 'Normal'-> 0)
+        df = pd.read_csv(label_path, skiprows=1)
+        #print(set(df["Hypertension"]))
+        # choose class
+        class_id = [[] for i in range(3)]
+        for subject in range(219):
+          if df['Hypertension'][subject] == 'Stage 1 hypertension' or df['Hypertension'][subject] == 'Stage 2 hypertension':
+            class_id[2].append(subject+1)
+          elif df['Hypertension'][subject] == 'Prehypertension':
+            class_id[1].append(subject+1)
+          elif df['Hypertension'][subject] == 'Normal':
+            class_id[0].append(subject+1)
+
+        for c in choose_class:
+          # c=0,1,2
+          for subject in class_id[c]:
+            subjectid = quality_dict[subject][0]
+            if subject == 180:
+              continue
+            elif subject in [7, 23, 83, 88, 89, 103]:
+              self.label.extend([c]*2)
+            else:
+              self.label.extend([c]*3)
+            # read ppg data
+            for segnum in range(1, 4):
+              if (subject, segnum) not in [(7, 3), (23, 3), (83, 3), (88, 2), (89, 2), (103, 3), (180, 1), (180, 2), (180, 3)]:
+                ppg_path = os.path.join(ppg_dir, '{}_{}.txt'.format(subjectid, segnum))
+                if os.path.exists(ppg_path):
+                  with open(ppg_path) as f:
+                    lines = f.readlines()[0].split('\t')[:-1]
+                    if len(lines) != 2100:
+                      print(subject, subjectid, segment, len(lines))
+                      continue
+                    ppg = torch.Tensor([float(x) for x in lines])
+                    ppg = ppg.reshape((1,2100))
+                    self.data.append(ppg)
+                    self.subjectid.append(subjectid)
+        self.label = torch.Tensor(self.label)
+        self.label = self.label.type(torch.long)
+        
+    def __getitem__(self, index):
+        data = self.data[index]
+        
+        if self.preprocessing:
+          data = roll_filter(median_filter(data))
+        if self.normalize:
+          data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
+        
+        label = self.label[index]
+        subjectid = self.subjectid[index]
+        
+        if self.choose_class==[0,2] and label==2:
+          label=torch.tensor(1)
+          
+        return data, label, subjectid
+
+    def __len__(self):
+        return len(self.data)
+      
+
+'''data_path=['/Users/yeseullee/Documents/ECE271B/MIMICii/part1',
+'/Users/yeseullee/Documents/ECE271B/MIMICii/part2',
+'/Users/yeseullee/Documents/ECE271B/MIMICii/part3',
+'/Users/yeseullee/Documents/ECE271B/MIMICii/part4']
+
+label_path=['/Users/yeseullee/Documents/ECE271B/MIMICii/part1/label1.csv',
+'/Users/yeseullee/Documents/ECE271B/MIMICii/part2/label2.csv',
+'/Users/yeseullee/Documents/ECE271B/MIMICii/part3/label3.csv',
+'/Users/yeseullee/Documents/ECE271B/MIMICii/part4/label4.csv']'''
+
+
+class MIMICDataset(data.Dataset):
+    def __init__(self, data_path, label_path, normalize=None, preprocessing=None, choose_class=[0,1,2]):
+        self.data_path=data_path
+        self.label_path=label_path
+        self.normalize=normalize
+        self.preprocessing=preprocessing
+        self.choose_class=choose_class
+        
+        self.data = []
+        self.label = []
+        self.subjectid = []
+        
+        #read BP labels
+        label_df1=pd.read_csv(label_path[0])
+        label_df2=pd.read_csv(label_path[1])
+        label_df3=pd.read_csv(label_path[2])
+        label_df4=pd.read_csv(label_path[3])
+        label_dfs=[label_df1,label_df2,label_df3,label_df4]
+        
+        class_id = [[] for i in range(3)]
+        for i in range(0,4):
+            for n in range(0,len(label_dfs[i])):
+                if label_dfs[i]['hypertension_level'][n]=='Hypertension':
+                    class_id[2].append(str(i+1)+'_'+(label_dfs[i]['subject_id'][n]))
+                elif label_dfs[i]['hypertension_level'][n]=='Prehypertension':
+                    class_id[1].append(str(i+1)+'_'+(label_dfs[i]['subject_id'][n]))
+                elif label_dfs[i]['hypertension_level'][n]=='Normal':
+                    class_id[0].append(str(i+1)+'_'+(label_dfs[i]['subject_id'][n]))    
+                
+        freq=125
+        sec=5
+        for c in choose_class:
+            for sub in class_id[c]:
+                seg_path = os.path.join(self.data_path[int(sub[0])-1], '{}.txt'.format(sub[2:]))
+                if os.path.exists(seg_path):
+                    with open(seg_path) as f:
+                        lines = f.readlines()[0].split('\t')[:-1]
+                if len(lines) != freq*sec:
+                    print(subject, subjectid, segment, len(lines))
+                    continue
+
+                seg = torch.Tensor([float(x) for x in lines])
+                seg = seg.reshape((1,freq*sec))
+                self.data.append(seg)
+                self.label.append(c)
+                self.subjectid.append(sub)
+        
+        self.label = torch.Tensor(self.label)
+        self.label = self.label.type(torch.long)
+                
+    def __getitem__(self, index):
+        data = self.data[index]
+        
+        if self.preprocessing:
+            data = roll_filter(median_filter(data))
+        if self.normalize:
+            data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
+          
+        label = self.label[index]
+        subjectid = self.subjectid[index]
+
+        if self.choose_class==[0,2] and label==2:
+            label=torch.tensor(1)
+
+        return data, label, subjectid
+
+    def __len__(self):
+        return len(self.data)
+      
+
 
 '''class BPDataset(data.Dataset):
     
@@ -319,44 +508,9 @@ for subject, segment in quality_dict.items():
         
         self.label = torch.Tensor(self.label)
         self.label = self.label.type(torch.long)
-       
-    def median_filter(tensor_data):
-        x,y = tensor_data.size()
-        new_data = torch.zeros(x,y)
-        for i in range(x):
-            for j in range(y):
-                if j == 0:
-                    new_data[i][j] = tensor_data[i][j]
-                elif j < 11:
-                    new_data[i][j] = tensor_data[i][0: 2 * j + 1].median()
-                elif 11 <= j < y - 11:
-                    new_data[i][j] = tensor_data[i][j - 11: j + 12].median()
-                elif y - 11 <= j < y - 1:
-                    new_data[i][j] = tensor_data[i][2*j - y : y].median()
-                elif j == y - 1:
-                    new_data[i][j] = tensor_data[i][j]
-        return new_data
-      
-    def roll_filter(tensor_data):
-        x,y = tensor_data.size()
-        new_data = torch.zeros(x,y)
-        for i in range(x):
-            for j in range(y):
-                if j == 0:
-                    new_data[i][j] = tensor_data[i][j]
-                elif j < 11:
-                    new_data[i][j] = tensor_data[i][0: 2 * j + 1].mean()
-                elif 11 <= j < y - 11:
-                    new_data[i][j] = tensor_data[i][j - 11: j + 12].mean()
-                elif y - 11 <= j < y - 1:
-                    new_data[i][j] = tensor_data[i][2*j - y : y].mean()
-                elif j == y - 1:
-                    new_data[i][j] = tensor_data[i][j]
-        return new_data
         
     def __getitem__(self, index):
         data = self.data[index]
-        data = roll_filter(median_filter(data)) #preprocessing
         data=(data-self.normalize['mean'])/self.normalize['std'] #normalization
         label = self.label[index]
         subjectid = self.subjectid[index]
@@ -364,71 +518,4 @@ for subject, segment in quality_dict.items():
 
     def __len__(self):
         return len(self.data)'''
-
-class BPDataset(data.Dataset):
-    
-    def __init__(self, ppg_dir, label_path, normalize, choose_class=[0,1,2]):
-
-        self.ppg_dir = ppg_dir
-        self.label_path = label_path
-        self.data = []
-        self.label = []
-        self.subjectid = []
-        self.normalize=normalize
-        self.choose_class=choose_class
-        
-        # read BP labels (Label: 'Stage 1 hypertension' or 'Stage 2 hypertension'-> 2; 'Prehypertension'-> 1; 'Normal'-> 0)
-        df = pd.read_csv(label_path, skiprows=1)
-        #print(set(df["Hypertension"]))
-        # choose class
-        class_id = [[] for i in range(3)]
-        for subject in range(219):
-          if df['Hypertension'][subject] == 'Stage 1 hypertension' or df['Hypertension'][subject] == 'Stage 2 hypertension':
-            class_id[2].append(subject+1)
-          elif df['Hypertension'][subject] == 'Prehypertension':
-            class_id[1].append(subject+1)
-          elif df['Hypertension'][subject] == 'Normal':
-            class_id[0].append(subject+1)
-
-        for c in choose_class:
-          # c=0,1,2
-          for subject in class_id[c]:
-            subjectid = quality_dict[subject][0]
-            if subject == 180:
-              continue
-            elif subject in [7, 23, 83, 88, 89, 103]:
-              self.label.extend([c]*2)
-            else:
-              self.label.extend([c]*3)
-            # read ppg data
-            for segnum in range(1, 4):
-              if (subject, segnum) not in [(7, 3), (23, 3), (83, 3), (88, 2), (89, 2), (103, 3), (180, 1), (180, 2), (180, 3)]:
-                ppg_path = os.path.join(ppg_dir, '{}_{}.txt'.format(subjectid, segnum))
-                if os.path.exists(ppg_path):
-                  with open(ppg_path) as f:
-                    lines = f.readlines()[0].split('\t')[:-1]
-                    if len(lines) != 2100:
-                      print(subject, subjectid, segment, len(lines))
-                      continue
-                    ppg = torch.Tensor([float(x) for x in lines])
-                    ppg = ppg.reshape((1,2100))
-                    self.data.append(ppg)
-                    self.subjectid.append(subjectid)
-        self.label = torch.Tensor(self.label)
-        self.label = self.label.type(torch.long)
-        
-    def __getitem__(self, index):
-        data = self.data[index]
-        data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
-        label = self.label[index]
-        subjectid = self.subjectid[index]
-        
-        if self.choose_class==[0,2] and label==2:
-          label=torch.tensor(1)
-          
-        return data, label, subjectid
-
-    def __len__(self):
-        return len(self.data)
-
 
