@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 
-def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_sizes, device, num_epochs):
+def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_sizes, device, num_epochs,fig_scale=[0.0,1.0]):
     since = time.time()
     model_later=copy.deepcopy(model)
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -105,7 +105,7 @@ def train_model(model, criterion, optimizer, scheduler, dataloaders, dataset_siz
     axs[0].set_title('model loss')
     axs[1].set_title('model accuracy')
     for ax in axs.flat:
-        ax.set_ylim([0.0,1.5])
+        ax.set_ylim(fig_scale)
     axs[0].plot(train_loss,'r',val_loss,'g',)
     axs[1].plot(train_acc,'r',val_acc,'g')
     fig.tight_layout()

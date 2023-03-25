@@ -306,8 +306,7 @@ def roll_filter(tensor_data):
 
 ## Set up Pytorch Dataloader ##
 class BPDataset(data.Dataset):
-    
-    def __init__(self, ppg_dir, label_path, normalize, preprocessing, choose_class=[0,1,2]):
+    def __init__(self, ppg_dir, label_path, normalize=None, preprocessing=False, choose_class=[0,1,2]):
 
         self.ppg_dir = ppg_dir
         self.label_path = label_path
@@ -349,7 +348,7 @@ class BPDataset(data.Dataset):
                   with open(ppg_path) as f:
                     lines = f.readlines()[0].split('\t')[:-1]
                     if len(lines) != 2100:
-                      print(subject, subjectid, segment, len(lines))
+                      print(subject, subjectid, segnum, len(lines))
                       continue
                     ppg = torch.Tensor([float(x) for x in lines])
                     ppg = ppg.reshape((1,2100))
@@ -388,9 +387,45 @@ label_path=['/Users/yeseullee/Documents/ECE271B/MIMICii/part1/label1.csv',
 '/Users/yeseullee/Documents/ECE271B/MIMICii/part3/label3.csv',
 '/Users/yeseullee/Documents/ECE271B/MIMICii/part4/label4.csv']'''
 
-
+## with .pt data format
 class MIMICDataset(data.Dataset):
-    def __init__(self, data_path, label_path, normalize=None, preprocessing=None, choose_class=[0,1,2]):
+    def __init__(self, data_path, label_path, subject_path, normalize=None, preprocessing=False, choose_class=[0,1,2]):
+        self.data_path=data_path
+        self.label_path=label_path
+        self.subject_path=subject_path
+        self.normalize=normalize
+        self.preprocessing=preprocessing
+        self.choose_class=choose_class
+        
+        self.data = torch.load(data_path)
+        self.label = torch.load(label_path)
+
+        self.subjectid = []
+        with open(repr(subject_path)[1:len(subject_path)+1], 'r') as fp:
+          for line in fp:
+              x = line[:-1]
+              self.subjectid.append(x)
+             
+    def __getitem__(self, index):
+        data = self.data[index]
+        if self.preprocessing:
+            data = roll_filter(median_filter(data))
+        if self.normalize:
+            data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
+        label = self.label[index]
+        subjectid = self.subjectid[index]
+
+        if self.choose_class==[0,2] and label==2:
+            label=torch.tensor(1)
+
+        return data, label, subjectid
+
+    def __len__(self):
+        return len(self.data)
+
+## with .txt data format
+'''class MIMICDataset(data.Dataset):
+    def __init__(self, data_path, label_path, normalize=None, preprocessing=False, choose_class=[0,1,2]):
         self.data_path=data_path
         self.label_path=label_path
         self.normalize=normalize
@@ -427,7 +462,8 @@ class MIMICDataset(data.Dataset):
                     with open(seg_path) as f:
                         lines = f.readlines()[0].split('\t')[:-1]
                 if len(lines) != freq*sec:
-                    print(subject, subjectid, segment, len(lines))
+                    print('Segment Length Error')
+                    print(sub)
                     continue
 
                 seg = torch.Tensor([float(x) for x in lines])
@@ -456,8 +492,75 @@ class MIMICDataset(data.Dataset):
         return data, label, subjectid
 
     def __len__(self):
+        return len(self.data)'''
+
+
+class DMDataset(data.Dataset):
+    
+    def __init__(self, ppg_dir, label_path, normalize=None, preprocessing=False):
+
+        self.ppg_dir = ppg_dir
+        self.label_path = label_path
+        self.data = []
+        self.label = []
+        self.subjectid = []
+        self.normalize=normalize
+        self.preprocessing=preprocessing
+        
+        # read Diabetes labels (Type 2 Diabetes=1, else=0)
+        df = pd.read_csv(label_path, skiprows=1)
+        # choose class
+        class_id = [[] for i in range(2)]
+        for subject in range(219):
+          if df['Diabetes'][subject] == 'Type 2 Diabetes' or df['Diabetes'][subject] == 'Diabetes':
+            class_id[1].append(subject+1)
+          elif pd.isna(df['Diabetes'][subject]):
+            class_id[0].append(subject+1)
+          else:
+            print('Unknown label:',df['Diabetes'][subject])
+
+        for c in range(0, len(class_id)):
+          for subject in class_id[c]:
+            subjectid = quality_dict[subject][0]
+            if subject == 180:
+              continue
+            elif subject in [7, 23, 83, 88, 89, 103]:
+              self.label.extend([c]*2)
+            else:
+              self.label.extend([c]*3)
+            # read ppg data
+            for segnum in range(1, 4):
+              if (subject, segnum) not in [(7, 3), (23, 3), (83, 3), (88, 2), (89, 2), (103, 3), (180, 1), (180, 2), (180, 3)]:
+                ppg_path = os.path.join(ppg_dir, '{}_{}.txt'.format(subjectid, segnum))
+                if os.path.exists(ppg_path):
+                  with open(ppg_path) as f:
+                    lines = f.readlines()[0].split('\t')[:-1]
+                    if len(lines) != 2100:
+                      print(subject, subjectid, segnum, len(lines))
+                      continue
+                    ppg = torch.Tensor([float(x) for x in lines])
+                    ppg = ppg.reshape((1,2100))
+                    self.data.append(ppg)
+                    self.subjectid.append(subjectid)
+        self.label = torch.Tensor(self.label)
+        self.label = self.label.type(torch.long)
+        
+    def __getitem__(self, index):
+        data = self.data[index]
+        
+        if self.preprocessing:
+          data = roll_filter(median_filter(data))
+        if self.normalize:
+          data = (data-self.normalize['mean'])/self.normalize['std'] #normalization
+        
+        label = self.label[index]
+        subjectid = self.subjectid[index]
+          
+        return data, label, subjectid
+
+    def __len__(self):
         return len(self.data)
-      
+
 
 
 '''class BPDataset(data.Dataset):

@@ -2,8 +2,85 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class FCNet(nn.Module):
+    def __init__(self, num_classes):
+        super(FCNet,self).__init__()
+        self.conv1=nn.Conv1d(1,128,kernel_size=8,stride=1,padding=3,bias=True)
+        self.bn1=nn.BatchNorm1d(128)
+        
+        self.conv2=nn.Conv1d(128,256,kernel_size=5,stride=1,padding=2,bias=True)
+        self.bn2=nn.BatchNorm1d(256)
+        
+        self.conv3=nn.Conv1d(256,128,kernel_size=3,stride=1,padding=1,bias=True)
+        self.bn3=nn.BatchNorm1d(128)
+        
+        self.avgpool=nn.AdaptiveAvgPool1d(1)
+        
+        self.fc=nn.Linear(128,num_classes)
+        
+    def forward(self,x):
+        x=self.conv1(x)
+        x=self.bn1(x)
+        x = F.relu(x)
+        
+        x=self.conv2(x)
+        x=self.bn2(x)
+        x = F.relu(x)
+        
+        x=self.conv3(x)
+        x=self.bn3(x)
+        x = F.relu(x)
+        
+        x=self.avgpool(x)
+        x=torch.flatten(x, 1)
+        
+        x=self.fc(x)
+    
+        
+        return x
+    
+class ResFCNet(nn.Module):
+    def __init__(self, num_classes):
+        super(FCNet,self).__init__()
+        
+        self.conv1=nn.Conv1d(1,128,kernel_size=7,stride=1,padding=3,bias=True)
+        self.bn1=nn.BatchNorm1d(128)
+        
+        self.conv2=nn.Conv1d(128,256,kernel_size=5,stride=1,padding=2,bias=True)
+        self.bn2=nn.BatchNorm1d(256)
+        
+        self.conv3=nn.Conv1d(256,128,kernel_size=3,stride=1,padding=1,bias=True)
+        self.bn3=nn.BatchNorm1d(128)
+        
+        self.avgpool=nn.AdaptiveAvgPool1d(1)
+        
+        self.fc=nn.Linear(128,num_classes)
+        
+    def forward(self,x):
+        
+        x=self.conv1(x)
+        x=self.bn1(x)     
+        x = F.relu(x)
+
+        x=self.conv2(x)
+        x=self.bn2(x)
+        x = F.relu(x)
+        
+        x=self.conv3(x)
+        x=self.bn3(x)
+        x = F.relu(x)
+        
+        x=self.avgpool(x)
+        x=torch.flatten(x, 1)
+        
+        x=self.fc(x)
+    
+        
+        return x
+        
+
 class shallowBlock(nn.Module):
-    def __init__(self,num_classes):
+    def __init__(self,in_channels, out_channels, stride=1, downsample=None):
         super(shallowBlock,self).__init__()
         self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm1d(out_channels)
@@ -368,3 +445,32 @@ class VGG16(nn.Module):
         x = self.fc(x)
         
         return x
+    
+class Conv3Net(nn.Module):
+    def __init__(self, n_class=2):
+        super(Conv3Net, self).__init__()
+        self.n_class = n_class
+        self.feature_extractor = nn.Sequential(
+            nn.Conv1d(1, 64, kernel_size=30, stride=3, padding=2),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Conv1d(64, 64, kernel_size=15, stride=3, padding=2),
+            #nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=7),
+            nn.Conv1d(64, 128, kernel_size=5, padding=2),
+            #nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=7)
+        )
+        self.classifier = nn.Sequential(
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(64, n_class)
+        )
+
+    def forward(self, x):
+        x = self.feature_extractor(x)
+        x = x.view(x.size(0), -1)
+        return self.classifier(x)
