@@ -1,2 +1,2 @@
 # uncertainty-aware-CNN-for-CVD-classification
-Uncertainty aware deep learning model for CVD classification using PPG
+Shallow-PPGNet: A Simple Yet Effective Network for Blood Pressure Disease detection
